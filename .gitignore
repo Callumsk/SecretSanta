@@ -1,0 +1,17 @@
+# GitHub Personal Access Tokens and sensitive config
+*.token
+*.pat
+SETUP_TOKEN.md
+config.local.js
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
