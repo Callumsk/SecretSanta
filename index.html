@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secret Santa Wheel</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🎄 Secret Santa Wheel</h1>
+        </header>
+
+        <!-- Participants Status -->
+        <div class="status-line" aria-live="polite" aria-atomic="true">
+            <span id="participants-count">Loading...</span>
+        </div>
+
+        <!-- Warning Banner (if no token) -->
+        <div id="token-warning" class="warning-banner" role="alert" style="display: none;">
+            ⚠️ No GitHub token configured. Assignments will only be saved locally. 
+            <button id="open-settings-from-warning" class="link-button">Configure Settings</button>
+        </div>
+
+        <!-- Main Content -->
+        <main>
+            <!-- Wheel Canvas Area -->
+            <div class="wheel-container">
+                <canvas id="wheel-canvas" width="600" height="600" aria-label="Secret Santa wheel"></canvas>
+                <div id="wheel-spinner" class="wheel-spinner" aria-hidden="true"></div>
+            </div>
+
+            <!-- Legend -->
+            <div class="legend">
+                <span class="legend-item">
+                    <span class="legend-dot active"></span>
+                    Available
+                </span>
+                <span class="legend-item">
+                    <span class="legend-dot assigned"></span>
+                    Already Assigned
+                </span>
+            </div>
+
+            <!-- Controls -->
+            <div class="controls">
+                <div class="control-group">
+                    <label for="spinner-identity">
+                        <span class="label-text">Who's spinning?</span>
+                        <span class="label-optional">(optional)</span>
+                    </label>
+                    <select id="spinner-identity" aria-label="Spinner identity">
+                        <option value="">I'm just spinning</option>
+                    </select>
+                </div>
+
+                <button id="spin-button" class="spin-button" disabled>
+                    Spin the Wheel
+                </button>
+
+                <div class="button-group">
+                    <button id="settings-button" class="secondary-button">Settings</button>
+                    <button id="admin-button" class="secondary-button">Admin</button>
+                </div>
+            </div>
+
+            <!-- Status Messages -->
+            <div id="status-message" class="status-message" aria-live="polite" aria-atomic="true"></div>
+        </main>
+    </div>
+
+    <!-- Result Modal -->
+    <div id="result-modal" class="modal" role="dialog" aria-labelledby="result-title" aria-modal="true" style="display: none;">
+        <div class="modal-content">
+            <h2 id="result-title">Assignment Result</h2>
+            <div class="result-display">
+                <p class="result-label">You are assigned to:</p>
+                <p id="result-recipient" class="result-recipient"></p>
+            </div>
+            <button id="hide-result-button" class="primary-button">Hide Result</button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal" role="dialog" aria-labelledby="settings-title" aria-modal="true" style="display: none;">
+        <div class="modal-content">
+            <h2 id="settings-title">Settings</h2>
+            <form id="settings-form">
+                <div class="form-group">
+                    <label for="gh-token">GitHub Personal Access Token</label>
+                    <input type="password" id="gh-token" placeholder="ghp_..." autocomplete="off">
+                    <small>Store locally only. Never shared with server.</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="repo-owner">Repository Owner</label>
+                    <input type="text" id="repo-owner" placeholder="username" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="repo-name">Repository Name</label>
+                    <input type="text" id="repo-name" placeholder="repo-name" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="repo-branch">Branch</label>
+                    <input type="text" id="repo-branch" placeholder="main" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="proxy-url">Proxy URL (optional)</label>
+                    <input type="url" id="proxy-url" placeholder="https://your-proxy.netlify.app/api/github">
+                    <small>Use a proxy to keep token server-side</small>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="primary-button">Save Settings</button>
+                    <button type="button" id="close-settings" class="secondary-button">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Modal -->
+    <div id="admin-modal" class="modal" role="dialog" aria-labelledby="admin-title" aria-modal="true" style="display: none;">
+        <div class="modal-content admin-content">
+            <h2 id="admin-title">Admin Panel</h2>
+            
+            <!-- Admin Passphrase Gate -->
+            <div id="admin-gate" class="admin-gate">
+                <div class="form-group">
+                    <label for="admin-passphrase">Admin Passphrase</label>
+                    <input type="password" id="admin-passphrase" placeholder="Set a passphrase" autocomplete="off">
+                    <small>Set this once. Stored locally only.</small>
+                </div>
+                <button id="admin-unlock" class="primary-button">Unlock Admin</button>
+            </div>
+
+            <!-- Admin Panel Content (hidden until unlocked) -->
+            <div id="admin-panel" style="display: none;">
+                <div class="admin-section">
+                    <h3>Participants</h3>
+                    <div class="participants-list" id="admin-participants-list">
+                        <!-- Populated by JS -->
+                    </div>
+                    <div class="form-group">
+                        <input type="text" id="new-participant" placeholder="New participant name">
+                        <button id="add-participant" class="primary-button">Add</button>
+                    </div>
+                </div>
+
+                <div class="admin-section">
+                    <h3>Assignments</h3>
+                    <div id="assignments-display"></div>
+                    <button id="reset-assignments" class="danger-button">Reset All Assignments</button>
+                </div>
+
+                <div class="admin-section">
+                    <h3>Export</h3>
+                    <button id="export-csv" class="secondary-button">Export as CSV</button>
+                </div>
+
+                <div class="form-actions">
+                    <button id="close-admin" class="secondary-button">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast" role="alert" aria-live="assertive" style="display: none;"></div>
+
+    <!-- Scripts -->
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>
+
