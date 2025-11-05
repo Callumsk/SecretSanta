@@ -329,11 +329,10 @@
 
             const anglePerSegment = (2 * Math.PI) / this.participants.length;
 
-            // Draw segments
+            // Draw segments - all rendered identically regardless of assignment status
             this.participants.forEach((name, index) => {
                 const startAngle = index * anglePerSegment + this.currentRotation;
                 const endAngle = (index + 1) * anglePerSegment + this.currentRotation;
-                const isAssigned = this.assignedRecipients.has(name);
 
                 // Draw segment
                 ctx.beginPath();
@@ -341,17 +340,15 @@
                 ctx.arc(this.centerX, this.centerY, this.radius, startAngle, endAngle);
                 ctx.closePath();
 
-                // Color: alternate, but grey if assigned
-                if (isAssigned) {
-                    ctx.fillStyle = '#e2e8f0';
-                    ctx.strokeStyle = '#cbd5e1';
-                } else {
-                    ctx.fillStyle = index % 2 === 0 ? '#dbeafe' : '#e0f2fe';
-                }
+                // Color: purely index-based alternating colors for readability
+                // No conditional styling based on assignment status
+                const baseFill = index % 2 === 0 ? '#f5f5f7' : '#e9e9ef';
+                ctx.fillStyle = baseFill;
+                ctx.strokeStyle = '#e2e8f0';
                 ctx.fill();
                 ctx.stroke();
 
-                // Draw text
+                // Draw text - identical styling for all names
                 const midAngle = (startAngle + endAngle) / 2;
                 const textRadius = this.radius * 0.7;
                 const x = this.centerX + Math.cos(midAngle) * textRadius;
@@ -362,10 +359,10 @@
                 ctx.rotate(midAngle + Math.PI / 2);
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillStyle = isAssigned ? '#94a3b8' : '#1e293b';
-                ctx.font = `${Math.max(12, Math.min(16, this.radius / 20))}px sans-serif`;
-                const displayName = isAssigned ? `• ${name}` : name;
-                ctx.fillText(displayName, 0, 0);
+                ctx.fillStyle = '#1e293b';
+                ctx.globalAlpha = 1; // Always full opacity
+                ctx.font = `600 ${Math.max(12, Math.min(16, this.radius / 20))}px system-ui`;
+                ctx.fillText(name, 0, 0); // No prefix, no conditional display
                 ctx.restore();
             });
 
@@ -644,7 +641,7 @@
             const assignedCount = this.state.assignedRecipients.size;
             const totalCount = this.state.participants.length;
 
-            // Update status line
+            // Update status line - show aggregate counts only, no per-name info
             document.getElementById('participants-count').textContent = 
                 `${totalCount} total • ${assignedCount} assigned`;
 
@@ -652,7 +649,7 @@
             const spinButton = document.getElementById('spin-button');
             if (eligible.length === 0) {
                 spinButton.disabled = true;
-                this.updateStatusMessage('All recipients assigned.');
+                this.updateStatusMessage('No more spins available.');
             } else {
                 spinButton.disabled = false;
                 this.updateStatusMessage('');
@@ -718,7 +715,7 @@
                         if (!eligible.includes(recipient)) {
                             // Recipient no longer available, pick another
                             if (eligible.length === 0) {
-                                showToast('Conflict: All recipients assigned. Please refresh.');
+                                showToast('No eligible recipients remaining. Please refresh.');
                                 this.isLoading = false;
                                 this.updateUI();
                                 return;

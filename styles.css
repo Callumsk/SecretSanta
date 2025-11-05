@@ -133,38 +133,6 @@ header h1 {
     pointer-events: none;
 }
 
-/* Legend */
-.legend {
-    display: flex;
-    justify-content: center;
-    gap: 1.5rem;
-    margin: 1rem 0;
-    font-size: 0.9rem;
-    color: var(--text-muted);
-}
-
-.legend-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.legend-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    display: inline-block;
-}
-
-.legend-dot.active {
-    background: var(--primary-color);
-}
-
-.legend-dot.assigned {
-    background: var(--text-muted);
-    opacity: 0.5;
-}
-
 /* Controls */
 .controls {
     display: flex;
