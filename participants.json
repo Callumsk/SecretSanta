@@ -1,4 +1,11 @@
 {
-  "participants": ["Alice", "Bob", "Charlie", "Dani", "Eli", "Fran", "Gus", "Hana"]
+  "participants": [
+    "Bob",
+    "Charlie",
+    "Dani",
+    "Eli",
+    "Fran",
+    "Gus",
+    "Hana"
+  ]
 }
-
