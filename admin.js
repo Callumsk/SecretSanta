@@ -17,30 +17,41 @@
         }
 
         setupEventListeners() {
-            const adminButton = document.getElementById('admin-button');
-            const adminUnlock = document.getElementById('admin-unlock');
-            const closeAdmin = document.getElementById('close-admin');
-            const addParticipant = document.getElementById('add-participant');
-            const resetAssignments = document.getElementById('reset-assignments');
-            const exportCsv = document.getElementById('export-csv');
-
-            adminButton?.addEventListener('click', () => this.open());
-            adminUnlock?.addEventListener('click', () => this.unlock());
-            closeAdmin?.addEventListener('click', () => this.close());
-            addParticipant?.addEventListener('click', () => this.addParticipant());
-            resetAssignments?.addEventListener('click', () => this.resetAssignments());
-            exportCsv?.addEventListener('click', () => this.exportCSV());
-
-            // Enter key on passphrase input
-            document.getElementById('admin-passphrase')?.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
+            // Use event delegation for buttons that might be in hidden modals
+            document.addEventListener('click', (e) => {
+                // Handle clicks on buttons or their children
+                const target = e.target.closest('button') || e.target;
+                const id = target.id;
+                
+                if (id === 'admin-button') {
+                    this.open();
+                } else if (id === 'admin-unlock') {
                     this.unlock();
+                } else if (id === 'close-admin') {
+                    this.close();
+                } else if (id === 'add-participant') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.addParticipant();
+                } else if (id === 'reset-assignments') {
+                    this.resetAssignments();
+                } else if (id === 'export-csv') {
+                    this.exportCSV();
+                } else if (target.classList.contains('participant-remove')) {
+                    const name = target.getAttribute('data-name');
+                    if (name) {
+                        this.removeParticipant(name);
+                    }
                 }
             });
 
-            // Enter key on new participant input
-            document.getElementById('new-participant')?.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
+            // Enter key on passphrase input
+            document.addEventListener('keypress', (e) => {
+                if (e.target.id === 'admin-passphrase' && e.key === 'Enter') {
+                    e.preventDefault();
+                    this.unlock();
+                } else if (e.target.id === 'new-participant' && e.key === 'Enter') {
+                    e.preventDefault();
                     this.addParticipant();
                 }
             });
@@ -121,9 +132,7 @@
                     <button class="participant-remove" data-name="${this.escapeHtml(name)}">Remove</button>
                 `;
                 
-                const removeBtn = item.querySelector('.participant-remove');
-                removeBtn.addEventListener('click', () => this.removeParticipant(name));
-                
+                // Event delegation handles the click, no need for individual listener
                 list.appendChild(item);
             });
 
@@ -172,7 +181,14 @@
         }
 
         async addParticipant() {
+            console.log('addParticipant called');
             const input = document.getElementById('new-participant');
+            if (!input) {
+                console.error('new-participant input not found');
+                alert('Input field not found. Please refresh the page.');
+                return;
+            }
+            
             const name = input.value.trim();
 
             if (!name) {
@@ -181,28 +197,52 @@
             }
 
             const app = window.SecretSantaApp;
-            if (!app) return;
+            if (!app) {
+                console.error('SecretSantaApp not found');
+                alert('App not initialized. Please refresh the page.');
+                return;
+            }
 
             if (app.state.participants.includes(name)) {
                 alert('Participant already exists.');
                 return;
             }
 
-            const participants = [...app.state.participants, name];
-            await this.saveParticipants(participants);
-            input.value = '';
+            console.log('Adding participant:', name);
+            try {
+                const participants = [...app.state.participants, name];
+                await this.saveParticipants(participants);
+                input.value = '';
+                console.log('Participant added successfully');
+            } catch (error) {
+                console.error('Failed to add participant:', error);
+                alert(`Failed to add participant: ${error.message}`);
+            }
         }
 
         async removeParticipant(name) {
+            if (!name) {
+                console.error('No name provided to removeParticipant');
+                return;
+            }
+            
             if (!confirm(`Remove ${name} from participants?`)) {
                 return;
             }
 
             const app = window.SecretSantaApp;
-            if (!app) return;
+            if (!app) {
+                alert('App not initialized. Please refresh the page.');
+                return;
+            }
 
-            const participants = app.state.participants.filter(p => p !== name);
-            await this.saveParticipants(participants);
+            try {
+                const participants = app.state.participants.filter(p => p !== name);
+                await this.saveParticipants(participants);
+            } catch (error) {
+                console.error('Failed to remove participant:', error);
+                alert(`Failed to remove participant: ${error.message}`);
+            }
         }
 
         async saveParticipants(participants) {
