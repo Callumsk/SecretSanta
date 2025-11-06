@@ -556,6 +556,11 @@
             });
             document.getElementById('hide-result-button').addEventListener('click', () => this.hideResult());
             document.getElementById('open-settings-from-warning')?.addEventListener('click', () => this.openSettings());
+            
+            // Update UI when spinner identity changes
+            document.getElementById('spinner-identity').addEventListener('change', () => {
+                this.updateUI();
+            });
 
             // Keyboard shortcuts
             document.addEventListener('keydown', (e) => {
@@ -657,7 +662,13 @@
             this.state.participants.forEach(name => {
                 const option = document.createElement('option');
                 option.value = name;
-                option.textContent = name;
+                const hasSpun = !!this.state.assignments[name];
+                option.textContent = hasSpun ? `${name} (already spun)` : name;
+                option.disabled = hasSpun;
+                if (hasSpun) {
+                    option.style.color = '#94a3b8';
+                    option.style.fontStyle = 'italic';
+                }
                 select.appendChild(option);
             });
             select.value = currentValue;
@@ -667,6 +678,10 @@
             const eligible = this.state.getEligibleRecipients();
             const assignedCount = this.state.assignedRecipients.size;
             const totalCount = this.state.participants.length;
+            const spinnerIdentity = document.getElementById('spinner-identity').value;
+            
+            // Check if current spinner has already spun
+            const hasSpun = spinnerIdentity && spinnerIdentity !== '' && !!this.state.assignments[spinnerIdentity];
 
             // Update status line - show aggregate counts only, no per-name info
             document.getElementById('participants-count').textContent = 
@@ -674,13 +689,19 @@
 
             // Update spin button
             const spinButton = document.getElementById('spin-button');
-            if (eligible.length === 0) {
+            if (hasSpun) {
+                spinButton.disabled = true;
+                this.updateStatusMessage('You have already spun. Each person can only spin once.');
+            } else if (eligible.length === 0) {
                 spinButton.disabled = true;
                 this.updateStatusMessage('No more spins available.');
             } else {
                 spinButton.disabled = false;
                 this.updateStatusMessage('');
             }
+            
+            // Update dropdown when spinner identity changes
+            this.updateSpinnerDropdown();
         }
 
         updateStatusMessage(message) {
@@ -691,6 +712,28 @@
             if (this.isLoading || this.wheel.isSpinning) return;
 
             const spinnerIdentity = document.getElementById('spinner-identity').value;
+            
+            // Check if spinner has already spun
+            if (spinnerIdentity && spinnerIdentity !== '') {
+                if (this.state.assignments[spinnerIdentity]) {
+                    showToast(`${spinnerIdentity} has already spun. Each person can only spin once.`);
+                    return;
+                }
+            } else {
+                // For anonymous spinners, we can't prevent duplicate spins, so strongly encourage identity
+                if (this.config.allowSpinnerIdentity) {
+                    const useIdentity = confirm('Anonymous spins cannot be tracked for duplicates. To ensure each person only spins once, please select your name from the dropdown. Would you like to select your identity now?');
+                    if (useIdentity) {
+                        document.getElementById('spinner-identity').focus();
+                        return;
+                    }
+                    // Allow anonymous spin but warn
+                    const proceed = confirm('Warning: Anonymous spins cannot be tracked. You may be able to spin multiple times. Continue anyway?');
+                    if (!proceed) {
+                        return;
+                    }
+                }
+            }
             
             // Refresh state before calculating eligibility
             this.state.updateAssignedRecipients();
@@ -808,7 +851,9 @@
                         // Success!
                         createConfetti();
                         this.showResult(recipient);
+                        // Update UI to reflect that spinner has now spun
                         this.updateUI();
+                        this.updateSpinnerDropdown();
                         this.isLoading = false;
                         document.getElementById('spin-button').disabled = false;
                         return;
