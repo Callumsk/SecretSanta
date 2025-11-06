@@ -391,16 +391,30 @@
             if (this.participants.length === 0) return;
 
             const targetIndex = this.participants.indexOf(targetName);
-            if (targetIndex === -1) return;
+            if (targetIndex === -1) {
+                console.error('Target not found in participants:', targetName);
+                return;
+            }
 
             this.isSpinning = true;
             const anglePerSegment = (2 * Math.PI) / this.participants.length;
-            const targetSegmentCenter = targetIndex * anglePerSegment + anglePerSegment / 2;
+            // Calculate the center angle of the target segment (0-based, so add 0.5 to get center)
+            const targetSegmentCenterAngle = targetIndex * anglePerSegment + (anglePerSegment / 2);
             
-            // Calculate rotation: multiple full spins + land on target
+            // Normalize current rotation to 0-2π range
+            const normalizedRotation = this.currentRotation % (2 * Math.PI);
+            const normalizedRotationPositive = normalizedRotation < 0 ? normalizedRotation + 2 * Math.PI : normalizedRotation;
+            
+            // Calculate rotation: multiple full spins + land on target segment center
             const spins = 5 + Math.random() * 3; // 5-8 full spins
-            const baseRotation = spins * 2 * Math.PI;
-            this.targetAngle = baseRotation - this.currentRotation + (2 * Math.PI - targetSegmentCenter);
+            const fullSpins = spins * 2 * Math.PI;
+            
+            // Target angle: we want to land with the pointer (at 0/up) pointing to the target segment center
+            // The pointer is at angle 0 (top), so we need to rotate so that the target segment center aligns with the pointer
+            // Since segments are drawn starting from currentRotation, we need to account for that
+            // Final position: targetSegmentCenterAngle should be at angle 0 (pointing up)
+            const targetFinalAngle = 2 * Math.PI - targetSegmentCenterAngle;
+            this.targetAngle = fullSpins + targetFinalAngle - normalizedRotationPositive;
 
             const startTime = Date.now();
             const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1000 : 3000;
@@ -420,7 +434,10 @@
                     this.animationId = requestAnimationFrame(animate);
                 } else {
                     this.isSpinning = false;
+                    // Ensure we land exactly on target
                     this.currentRotation = startRotation + this.targetAngle;
+                    // Normalize to prevent overflow
+                    this.currentRotation = this.currentRotation % (2 * Math.PI);
                     this.draw();
                     if (onComplete) onComplete();
                 }
@@ -674,10 +691,23 @@
             if (this.isLoading || this.wheel.isSpinning) return;
 
             const spinnerIdentity = document.getElementById('spinner-identity').value;
+            
+            // Refresh state before calculating eligibility
+            this.state.updateAssignedRecipients();
             const eligible = this.state.getEligibleRecipients(spinnerIdentity);
 
             if (eligible.length === 0) {
                 showToast('No eligible recipients remaining.');
+                return;
+            }
+
+            // Select random target from eligible ONLY
+            const target = randomChoice(eligible);
+            
+            // Double-check target is still eligible (defensive programming)
+            if (!eligible.includes(target) || this.state.assignedRecipients.has(target)) {
+                console.error('Selected target is not eligible:', target, 'Eligible:', eligible);
+                showToast('Error: Selected recipient is not eligible. Please try again.');
                 return;
             }
 
@@ -686,9 +716,6 @@
             const spinButton = document.getElementById('spin-button');
             spinButton.disabled = true;
 
-            // Select random target
-            const target = randomChoice(eligible);
-
             // Animate wheel
             this.wheel.spinToTarget(target, async () => {
                 // After animation completes, handle assignment
@@ -696,7 +723,7 @@
             });
         }
 
-        async commitAssignment(spinnerName, recipient) {
+        async commitAssignment(spinnerName, recipient, isAdjustment = false) {
             const maxRetries = this.config.maxCommitRetries || 3;
             let retryCount = 0;
             let lastStateSha = null;
@@ -717,30 +744,55 @@
                     if (stateData.content && stateData.content.assignments) {
                         this.state.mergeAssignments(stateData.content.assignments);
                         
-                        // Re-check eligibility
+                        // Re-check eligibility BEFORE committing
+                        this.state.updateAssignedRecipients();
                         const eligible = this.state.getEligibleRecipients(
                             document.getElementById('spinner-identity').value
                         );
                         
-                        if (!eligible.includes(recipient)) {
+                        if (!eligible.includes(recipient) || this.state.assignedRecipients.has(recipient)) {
                             // Recipient no longer available, pick another
                             if (eligible.length === 0) {
                                 showToast('No eligible recipients remaining. Please refresh.');
                                 this.isLoading = false;
+                                document.getElementById('spin-button').disabled = false;
                                 this.updateUI();
                                 return;
                             }
                             recipient = randomChoice(eligible);
-                            // Quick adjustment spin
-                            this.wheel.spinToTarget(recipient, () => {
-                                // Continue with commit
-                            });
-                            showToast('Assignment adjusted due to conflict.');
+                            // Quick adjustment spin to new target
+                            if (!isAdjustment) {
+                                // Only do adjustment spin if this is the first attempt
+                                this.wheel.spinToTarget(recipient, () => {
+                                    // Continue with commit after adjustment spin
+                                    this.commitAssignment(spinnerName, recipient, true).catch(err => {
+                                        console.error('Failed to commit after adjustment:', err);
+                                        this.isLoading = false;
+                                        document.getElementById('spin-button').disabled = false;
+                                        showToast('Failed to save assignment. Please try again.');
+                                    });
+                                });
+                                showToast('Assignment adjusted due to conflict.');
+                                return; // Return early, will commit after adjustment spin completes
+                            } else {
+                                // If already adjusting, just continue with the new recipient
+                                showToast('Adjusting to available recipient...');
+                                // Continue with the loop to commit
+                            }
                         }
+                    }
+
+                    // Final validation: ensure recipient is still eligible
+                    this.state.updateAssignedRecipients();
+                    if (this.state.assignedRecipients.has(recipient)) {
+                        throw new Error(`Recipient ${recipient} is already assigned. Please refresh and try again.`);
                     }
 
                     // Add assignment
                     this.state.addAssignment(spinnerName, recipient);
+                    
+                    // Update wheel immediately to reflect new assignment
+                    this.wheel.setParticipants(this.state.participants, this.state.assignedRecipients);
 
                     // Prepare commit
                     const stateJson = {
