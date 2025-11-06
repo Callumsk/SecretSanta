@@ -207,27 +207,62 @@
 
         async saveParticipants(participants) {
             const app = window.SecretSantaApp;
-            if (!app) return;
+            if (!app) {
+                alert('App not initialized. Please refresh the page.');
+                return;
+            }
 
             const config = app.config;
-            const store = app.store || app.localStore;
+            
+            // Validate config
+            if (!config.owner || !config.repo) {
+                alert('Repository not configured. Please set owner and repo in Settings.');
+                return;
+            }
+            
+            // Ensure store is available, fallback to localStore if needed
+            let store = app.store;
+            if (!store) {
+                store = app.localStore;
+                this.showToast('Warning: Using local storage. GitHub token may be missing.');
+            }
+
             const participantsData = { participants };
 
             try {
                 // Get current sha
-                let currentData;
+                let currentData = { sha: null };
                 try {
                     currentData = await store.getFile(config.participantsPath);
                 } catch (e) {
-                    currentData = { sha: null };
+                    console.warn('Could not get current file, will create new:', e);
+                    // If file doesn't exist, sha will be null which is fine
+                    if (e.message && !e.message.includes('404')) {
+                        throw new Error(`Failed to read participants file: ${e.message}`);
+                    }
                 }
 
-                await store.putFile(
-                    config.participantsPath,
-                    participantsData,
-                    currentData.sha,
-                    'Admin: Update participants'
-                );
+                try {
+                    await store.putFile(
+                        config.participantsPath,
+                        participantsData,
+                        currentData.sha,
+                        'Admin: Update participants'
+                    );
+                } catch (error) {
+                    // Handle specific GitHub API errors
+                    let errorMessage = 'Failed to save participants.';
+                    if (error.status === 401) {
+                        errorMessage = 'Authentication failed. Please check your GitHub token in Settings.';
+                    } else if (error.status === 403) {
+                        errorMessage = 'Permission denied. Check token permissions and repository access.';
+                    } else if (error.status === 409) {
+                        errorMessage = 'Conflict: File was modified. Please refresh and try again.';
+                    } else if (error.message) {
+                        errorMessage = `Error: ${error.message}`;
+                    }
+                    throw new Error(errorMessage);
+                }
 
                 app.state.loadParticipants(participantsData);
                 app.updateSpinnerDropdown();
@@ -238,7 +273,7 @@
                 this.showToast('Participants updated.');
             } catch (error) {
                 console.error('Failed to save participants:', error);
-                alert('Failed to save participants. Check console for details.');
+                alert(`Failed to save participants:\n\n${error.message}\n\nCheck browser console for details.`);
             }
         }
 
@@ -277,27 +312,62 @@
             }
 
             const app = window.SecretSantaApp;
-            if (!app) return;
+            if (!app) {
+                alert('App not initialized. Please refresh the page.');
+                return;
+            }
 
             const config = app.config;
-            const store = app.store || app.localStore;
+            
+            // Validate config
+            if (!config.owner || !config.repo) {
+                alert('Repository not configured. Please set owner and repo in Settings.');
+                return;
+            }
+            
+            // Ensure store is available, fallback to localStore if needed
+            let store = app.store;
+            if (!store) {
+                store = app.localStore;
+                this.showToast('Warning: Using local storage. GitHub token may be missing.');
+            }
+
             const emptyState = { assignments: {} };
 
             try {
                 // Get current sha
-                let currentData;
+                let currentData = { sha: null };
                 try {
                     currentData = await store.getFile(config.statePath);
                 } catch (e) {
-                    currentData = { sha: null };
+                    console.warn('Could not get current file, will create new:', e);
+                    // If file doesn't exist, sha will be null which is fine
+                    if (e.message && !e.message.includes('404')) {
+                        throw new Error(`Failed to read state file: ${e.message}`);
+                    }
                 }
 
-                await store.putFile(
-                    config.statePath,
-                    emptyState,
-                    currentData.sha,
-                    'Admin: Reset all assignments'
-                );
+                try {
+                    await store.putFile(
+                        config.statePath,
+                        emptyState,
+                        currentData.sha,
+                        'Admin: Reset all assignments'
+                    );
+                } catch (error) {
+                    // Handle specific GitHub API errors
+                    let errorMessage = 'Failed to reset assignments.';
+                    if (error.status === 401) {
+                        errorMessage = 'Authentication failed. Please check your GitHub token in Settings.';
+                    } else if (error.status === 403) {
+                        errorMessage = 'Permission denied. Check token permissions and repository access.';
+                    } else if (error.status === 409) {
+                        errorMessage = 'Conflict: File was modified. Please refresh and try again.';
+                    } else if (error.message) {
+                        errorMessage = `Error: ${error.message}`;
+                    }
+                    throw new Error(errorMessage);
+                }
 
                 app.state.loadState(emptyState);
                 app.wheel.setParticipants(app.state.participants, app.state.assignedRecipients);
@@ -307,7 +377,7 @@
                 this.showToast('All assignments reset.');
             } catch (error) {
                 console.error('Failed to reset assignments:', error);
-                alert('Failed to reset assignments. Check console for details.');
+                alert(`Failed to reset assignments:\n\n${error.message}\n\nCheck browser console for details.`);
             }
         }
 

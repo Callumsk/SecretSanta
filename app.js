@@ -97,7 +97,17 @@
                     if (response.status === 404) {
                         return { content: null, sha: null };
                     }
-                    throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+                    const error = new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+                    error.status = response.status;
+                    // Try to get error details from response
+                    try {
+                        const errorData = await response.json();
+                        error.data = errorData;
+                        error.message = errorData.message || error.message;
+                    } catch (e) {
+                        // Ignore JSON parse errors
+                    }
+                    throw error;
                 }
 
                 const data = await response.json();
@@ -139,13 +149,13 @@
                 });
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
+                    const error = new Error(errorData.message || errorData.error || `Proxy error: ${response.status} ${response.statusText}`);
+                    error.status = response.status;
+                    error.data = errorData;
                     if (response.status === 409) {
-                        const conflictError = new Error('Conflict: file was modified');
-                        conflictError.status = 409;
-                        conflictError.data = errorData;
-                        throw conflictError;
+                        error.message = 'Conflict: file was modified. Please refresh and try again.';
                     }
-                    throw new Error(`Proxy error: ${response.status} ${response.statusText}`);
+                    throw error;
                 }
                 return await response.json();
             }
@@ -174,13 +184,13 @@
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
+                const error = new Error(errorData.message || `GitHub API error: ${response.status} ${response.statusText}`);
+                error.status = response.status;
+                error.data = errorData;
                 if (response.status === 409) {
-                    const conflictError = new Error('Conflict: file was modified');
-                    conflictError.status = 409;
-                    conflictError.data = errorData;
-                    throw conflictError;
+                    error.message = 'Conflict: file was modified. Please refresh and try again.';
                 }
-                throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+                throw error;
             }
 
             return await response.json();
